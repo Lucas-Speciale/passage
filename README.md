@@ -28,4 +28,6 @@ pnpm data:build:details
 
 The global route textures are 2,048 × 2,048 Web Mercator WebP files derived from the local 0.1° GFW archive. Their shared zoom-safe route spine is a 0.44 MB GeoJSON file. Named-passage close-ups use separate 0.01° GFW fields, aggregated offline into identity-free monthly Web Mercator textures. Raw CSV reports and vessel identifiers remain local and are never part of the browser build.
 
+Each named passage also has a compact 2012–2026 corridor fingerprint. Every vertical slice compresses one monthly route field across the passage’s principal route axis; dragging its playhead updates the same map timeline and reveals lane persistence, branching, and drift without implying vessel direction.
+
 The basemap uses OpenFreeMap vector tiles. Default inland settlement labels are suppressed; country labels remain globally available and a small local GeoJSON layer supplies shipping-relevant coastal-city names.

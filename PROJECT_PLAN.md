@@ -24,6 +24,7 @@ The portfolio family remains visible through the same Inter UI type, Georgia edi
 - **Flow:** log-scaled AIS cargo presence for the selected month. Adjacent months are stacked and crossfaded as a fractional timeline advances.
 - **Change:** a rolling same-month year-over-year comparison. Amber means stronger in the prior year, cyan means stronger in the selected year, and pale overlap indicates persistence. Playback remains in Change mode.
 - **Passage focus:** selecting Suez, Panama, Bab el-Mandeb, Malacca, Hormuz, or the Cape route calculates a region-filling zoom from that passage’s geographic bounds and switches to its 0.01° monthly detail field.
+- **Corridor fingerprint:** a selected passage can switch from its transit chart to a 2012–2026 time-by-route profile. Each vertical slice is one month compressed across the passage’s principal route axis; dragging the shared playhead updates the map.
 - **Passage chart:** the selected PortWatch series uses the same current month as the map, with a moving playhead, daily cargo-transit estimate, and same-month prior-year change.
 - **Map navigation:** MapLibre supplies cursor-anchored zoom, inertial panning, native trackpad gestures, continuous horizontal world copies, passage `fitBounds`, and whole-world reset behavior.
 
@@ -66,6 +67,7 @@ Key files:
 - `scripts/build_route_network.py`: extracts the compact, zoom-safe global route spine.
 - `scripts/acquire_all_gfw_combined_high.sh`: one-active-report, rate-limit-conscious 0.01° acquisition for six passage regions.
 - `scripts/build_corridor_detail.py`: strips vessel identity fields and emits aggregated monthly detail textures.
+- `scripts/build_corridor_fingerprints.py`: derives the six compact transverse time profiles from the published identity-free detail textures.
 - `public/data/passage/manifest.json`: available months, projection, metric, and asset contract.
 
 ## Performance contract
@@ -89,6 +91,7 @@ Completed:
 - fractional month crossfades;
 - playable rolling Change mode;
 - deep passage focus;
+- six interactive, timeline-linked corridor fingerprints;
 - six timeline-linked PortWatch passage charts;
 - responsive UI, tests, lint, and static build.
 

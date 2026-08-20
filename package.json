@@ -13,7 +13,8 @@
     "data:build:draft": ".venv/bin/python scripts/build_draft_data.py",
     "data:build:world": ".venv/bin/python scripts/build_world_data.py --workers 4 && .venv/bin/python scripts/reproject_world_routes.py --workers 4 && .venv/bin/python scripts/build_route_network.py",
     "data:build:network": ".venv/bin/python scripts/build_route_network.py",
-    "data:build:details": ".venv/bin/python scripts/build_corridor_detail.py && .venv/bin/python scripts/reproject_corridor_details.py --workers 4"
+    "data:build:details": ".venv/bin/python scripts/build_corridor_detail.py && .venv/bin/python scripts/reproject_corridor_details.py --workers 4 && .venv/bin/python scripts/build_corridor_fingerprints.py",
+    "data:build:fingerprints": ".venv/bin/python scripts/build_corridor_fingerprints.py"
   },
   "dependencies": {
     "maplibre-gl": "6.4.0",

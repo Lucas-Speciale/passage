@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PassageMap } from "@/components/PassageMap";
 import type { DetailConfig, PassageMapHandle } from "@/components/PassageMap";
@@ -10,6 +11,7 @@ import type { Corridor, CorridorData, PassageMode } from "@/types/passage";
 const DEMO_PERIODS = ["2012-01", "2020-04", "2026-07"];
 const DETAIL_ZOOM = 5.5;
 const MONTH_DURATION = 560;
+const GUIDE_DISMISSED_KEY = "passage:guide-dismissed:2026-08-v1";
 
 interface PassageManifest {
   periods: string[];
@@ -20,6 +22,17 @@ interface DetailManifest {
   corridors: Record<string, DetailConfig>;
 }
 
+type AnalysisView = "fingerprint" | "transits";
+
+const FINGERPRINT_EDGES: Record<string, [string, string]> = {
+  suez: ["West edge", "East edge"],
+  panama: ["Southwest edge", "Northeast edge"],
+  "bab-el-mandeb": ["West edge", "East edge"],
+  malacca: ["Southwest edge", "Northeast edge"],
+  hormuz: ["North edge", "South edge"],
+  cape: ["North edge", "South edge"],
+};
+
 function routeUrl(period: string) {
   return `/data/passage/world/route-${period}.webp`;
 }
@@ -28,7 +41,44 @@ function detailUrl(config: DetailConfig, period: string) {
   return `/data/passage/details/${config.slug}/route-${period}.webp`;
 }
 
-function CorridorChart({ corridor, currentPeriod, onFocus }: { corridor: Corridor; currentPeriod: string; onFocus: () => void }) {
+function hasDismissedGuide() {
+  try {
+    return window.localStorage.getItem(GUIDE_DISMISSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function rememberGuideDismissal() {
+  try {
+    window.localStorage.setItem(GUIDE_DISMISSED_KEY, "true");
+  } catch {
+    // The guide still closes when browser storage is unavailable.
+  }
+}
+
+function CorridorAnalysis({
+  corridor,
+  currentPeriod,
+  detail,
+  periods,
+  time,
+  minimumTime,
+  onFocus,
+  onTimeChange,
+  onPause,
+}: {
+  corridor: Corridor;
+  currentPeriod: string;
+  detail?: DetailConfig;
+  periods: string[];
+  time: number;
+  minimumTime: number;
+  onFocus: () => void;
+  onTimeChange: (nextTime: number) => void;
+  onPause: () => void;
+}) {
+  const [analysisView, setAnalysisView] = useState<AnalysisView>("fingerprint");
   const width = 268;
   const height = 82;
   const path = chartPath(corridor.series, width, height);
@@ -47,9 +97,11 @@ function CorridorChart({ corridor, currentPeriod, onFocus }: { corridor: Corrido
     : undefined;
   const markerX = currentIndex >= 0 ? (currentIndex / Math.max(corridor.series.length - 1, 1)) * width : 0;
   const markerY = currentPoint ? height - ((currentPoint.dailyAverage - low) / span) * height : 0;
+  const fingerprintEdges = detail ? FINGERPRINT_EDGES[detail.slug] : undefined;
+  const fingerprintPosition = periods.length > 1 ? (time / (periods.length - 1)) * 100 : 0;
 
   return (
-    <section className="corridor-analysis" aria-label={`${corridor.name} transit history`}>
+    <section className="corridor-analysis" aria-label={`${corridor.name} route analysis`}>
       <div className="analysis-heading">
         <div>
           <span>Selected passage</span>
@@ -58,6 +110,10 @@ function CorridorChart({ corridor, currentPeriod, onFocus }: { corridor: Corrido
         <button className="focus-button" onClick={onFocus}><i aria-hidden="true" />Focus route</button>
       </div>
       <p className="corridor-note">{corridor.note}</p>
+      <div className="analysis-switch" aria-label="Passage analysis view">
+        <button aria-pressed={analysisView === "fingerprint"} className={analysisView === "fingerprint" ? "active" : ""} onClick={() => setAnalysisView("fingerprint")}>Fingerprint</button>
+        <button aria-pressed={analysisView === "transits"} className={analysisView === "transits" ? "active" : ""} onClick={() => setAnalysisView("transits")}>Transits</button>
+      </div>
       <div className="metric-grid">
         <div>
           <span>{currentPoint ? formatPeriod(currentPeriod) : "PortWatch starts 2019"}</span>
@@ -72,22 +128,56 @@ function CorridorChart({ corridor, currentPeriod, onFocus }: { corridor: Corrido
           <small>{previousYear ? formatPeriod(previousYear.period) : "Awaiting comparable month"}</small>
         </div>
       </div>
-      <div className="chart-wrap">
-        <div className="chart-labels"><span>{Math.ceil(high)}</span><span>{Math.floor(low)}</span></div>
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Monthly average cargo-vessel transits at ${corridor.name} from 2019 to 2026`}>
-          <path className="chart-area" d={`${path} L${width},${height} L0,${height} Z`} />
-          <path className="chart-line" d={path} />
-          <line x1="0" x2={width} y1="41" y2="41" className="chart-grid" />
-          {currentPoint && (
-            <>
-              <line x1={markerX} x2={markerX} y1="0" y2={height} className="chart-playhead" />
-              <circle cx={markerX} cy={markerY} r="3.2" className="chart-marker" />
-            </>
-          )}
-        </svg>
-        <div className="chart-years"><span>2019</span><span>PortWatch coverage only</span><span>2026</span></div>
-      </div>
-      <p className="source-line">IMF PortWatch · daily chokepoint estimates</p>
+      {analysisView === "fingerprint" && detail && fingerprintEdges ? (
+        <div className="fingerprint-wrap">
+          <div className="fingerprint-heading">
+            <span>Route shape through time</span>
+            <strong>{formatPeriod(currentPeriod)}</strong>
+          </div>
+          <div className="fingerprint-plot">
+            <Image
+              key={detail.slug}
+              src={`/data/passage/fingerprints/${detail.slug}.webp`}
+              alt={`${corridor.name} transverse route-presence fingerprint from 2012 to 2026`}
+              width={700}
+              height={224}
+              unoptimized
+              draggable={false}
+            />
+            <div className="fingerprint-edges" aria-hidden="true"><span>{fingerprintEdges[0]}</span><span>{fingerprintEdges[1]}</span></div>
+            <i className="fingerprint-playhead" style={{ left: `${fingerprintPosition}%` }} aria-hidden="true" />
+            <input
+              aria-label={`Explore ${corridor.name} fingerprint by month`}
+              type="range"
+              min={minimumTime}
+              max={Math.max(periods.length - 1, 0)}
+              step="0.01"
+              value={time}
+              onPointerDown={onPause}
+              onChange={(event) => onTimeChange(Number(event.target.value))}
+            />
+          </div>
+          <div className="fingerprint-years"><span>2012</span><span>Drag to read the route</span><span>2026</span></div>
+          <p className="fingerprint-note">Each vertical slice compresses one month across the passage. Bright bands mark the persistent lane; branching and drift appear around it.</p>
+        </div>
+      ) : (
+        <div className="chart-wrap">
+          <div className="chart-labels"><span>{Math.ceil(high)}</span><span>{Math.floor(low)}</span></div>
+          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Monthly average cargo-vessel transits at ${corridor.name} from 2019 to 2026`}>
+            <path className="chart-area" d={`${path} L${width},${height} L0,${height} Z`} />
+            <path className="chart-line" d={path} />
+            <line x1="0" x2={width} y1="41" y2="41" className="chart-grid" />
+            {currentPoint && (
+              <>
+                <line x1={markerX} x2={markerX} y1="0" y2={height} className="chart-playhead" />
+                <circle cx={markerX} cy={markerY} r="3.2" className="chart-marker" />
+              </>
+            )}
+          </svg>
+          <div className="chart-years"><span>2019</span><span>PortWatch coverage only</span><span>2026</span></div>
+        </div>
+      )}
+      <p className="source-line">{analysisView === "fingerprint" ? "Global Fishing Watch · relative monthly route presence" : "IMF PortWatch · daily chokepoint estimates"}</p>
     </section>
   );
 }
@@ -102,6 +192,7 @@ export function PassageExplorer() {
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(0.75);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutAttention, setAboutAttention] = useState(false);
   const mapRef = useRef<PassageMapHandle>(null);
   const previousFrame = useRef<number | null>(null);
 
@@ -121,6 +212,28 @@ export function PassageExplorer() {
   const dateLabel = mode === "change"
     ? `${formatPeriod(earlierLowerPeriod)} — ${formatPeriod(lowerPeriod)}`
     : formatPeriod(lowerPeriod);
+
+  const closeAbout = useCallback(() => {
+    rememberGuideDismissal();
+    setAboutOpen(false);
+    setAboutAttention(true);
+  }, []);
+
+  useEffect(() => {
+    const openTimer = window.setTimeout(() => {
+      if (!hasDismissedGuide()) setAboutOpen(true);
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!aboutOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeAbout();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [aboutOpen, closeAbout]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -243,7 +356,19 @@ export function PassageExplorer() {
           <button className={mode === "flow" ? "active" : ""} onClick={() => switchMode("flow")}>Flow</button>
           <button className={mode === "change" ? "active" : ""} onClick={() => switchMode("change")}>Change</button>
         </div>
-        <button className="about-button" onClick={() => setAboutOpen(true)} aria-label="About this map"><span>i</span> About</button>
+        <button
+          className={`about-button ${aboutAttention ? "attention" : ""}`}
+          onClick={() => {
+            setAboutAttention(false);
+            setAboutOpen(true);
+          }}
+          onAnimationEnd={(event) => {
+            if (event.animationName === "about-attention") setAboutAttention(false);
+          }}
+          aria-controls="passage-guide"
+          aria-expanded={aboutOpen}
+          aria-label="Open guide to Passage"
+        ><span>i</span> About</button>
       </div>
 
       <aside className="explore-panel">
@@ -257,7 +382,19 @@ export function PassageExplorer() {
             </button>
           ))}
         </div>
-        {selected ? <CorridorChart corridor={selected} currentPeriod={lowerPeriod} onFocus={() => focusCorridor(selected)} /> : <div className="panel-loading">Loading passage index…</div>}
+        {selected ? (
+          <CorridorAnalysis
+            corridor={selected}
+            currentPeriod={lowerPeriod}
+            detail={selectedDetail}
+            periods={periods}
+            time={time}
+            minimumTime={mode === "change" ? 12 : 0}
+            onFocus={() => focusCorridor(selected)}
+            onTimeChange={setTime}
+            onPause={() => setPlaying(false)}
+          />
+        ) : <div className="panel-loading">Loading passage index…</div>}
       </aside>
 
       <div className="map-tools" aria-label="Map controls">
@@ -316,19 +453,26 @@ export function PassageExplorer() {
 
       {aboutOpen && (
         <div className="about-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setAboutOpen(false);
+          if (event.target === event.currentTarget) closeAbout();
         }}>
-          <section className="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
-            <button className="dialog-close" onClick={() => setAboutOpen(false)} aria-label="Close about Passage">×</button>
+          <section id="passage-guide" className="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
+            <button className="dialog-close" onClick={closeAbout} aria-label="Close guide to Passage" autoFocus>×</button>
             <p className="eyebrow">How to read Passage</p>
             <h2 id="about-title">The network is the subject.</h2>
-            <p>The luminous field shows standardized hourly AIS presence for cargo vessels moving 6–25 knots. Brighter routes were more consistently occupied within the selected month.</p>
+            <p>Play or drag the timeline to watch the ocean network change month by month. Passage shows aggregated cargo-vessel AIS presence—not individual ships, cargo tonnage, or exact voyages.</p>
             <div>
-              <span>Flow</span><p>Monthly fields blend continuously as the timeline moves. A vector route spine preserves sharp geometry at close zoom without claiming vessel-level precision.</p>
-              <span>Change</span><p>Each selected month is compared with the same month one year earlier. Amber was stronger before, cyan is stronger now, and pale routes persisted.</p>
-              <span>Passages</span><p>Selecting a passage opens exact 0.01° monthly detail. Country boundaries stay sharp globally; labels are limited to countries and shipping-relevant coastal cities.</p>
+              <span>Flow</span><p>Cyan brightness shows how consistently cargo-vessel AIS occupied each route during the selected month. Bright cores are persistent corridors; faint branches were used less often.</p>
+              <span>Change</span><p>Compare the selected month with the same month one year earlier. Amber was stronger before, cyan is stronger now, and pale routes persisted across both periods.</p>
+              <span>Passages</span><p>Select one of six strategic passages to zoom into its higher-detail monthly route field while the shared timeline keeps moving.</p>
+              <span>Fingerprint</span><p>Read the selected passage as a 2012–2026 route profile. Each vertical slice is one month; drag across it to reveal persistent lanes, branching, and drift on the map.</p>
+              <span>Transits</span><p>Switch to the PortWatch chart for estimated daily cargo-vessel transits and year-over-year change. This separate series begins in 2019.</p>
             </div>
-            <small>Draft 3 · Global Fishing Watch public presence v4.0 · IMF PortWatch · OpenFreeMap</small>
+            <small className="guide-sources">
+              <span><strong>Route presence and fingerprints</strong> Global Fishing Watch public-global-presence v4.0</span>
+              <span><strong>Passage transit estimates</strong> IMF PortWatch</span>
+              <span><strong>Basemap and place data</strong> OpenFreeMap · OpenMapTiles · OpenStreetMap</span>
+              <span><strong>Reference validation</strong> World Bank–IMF commercial shipping-density archive, 2015–2021 (not displayed)</span>
+            </small>
           </section>
         </div>
       )}
