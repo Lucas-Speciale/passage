@@ -1,0 +1,35 @@
+{
+  "name": "passage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "serve out -l 3000",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "data:build:draft": ".venv/bin/python scripts/build_draft_data.py",
+    "data:build:world": ".venv/bin/python scripts/build_world_data.py --workers 4 && .venv/bin/python scripts/reproject_world_routes.py --workers 4 && .venv/bin/python scripts/build_route_network.py",
+    "data:build:network": ".venv/bin/python scripts/build_route_network.py",
+    "data:build:details": ".venv/bin/python scripts/build_corridor_detail.py && .venv/bin/python scripts/reproject_corridor_details.py --workers 4"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.4.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.3.1",
+    "serve": "^14.2.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

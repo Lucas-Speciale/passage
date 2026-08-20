@@ -1,0 +1,24 @@
+# JavaScript / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Python build environment
+.venv/
+__pycache__/
+*.pyc
+
+# Large and reproducible source data stays local.
+data/raw/world-bank/*.zip
+data/raw/portwatch/daily-chokepoints-page-*.json
+data/raw/global-fishing-watch/downloads/
+
+# Intermediate products are reproducible and are not deployed.
+data/processed/*
+!data/processed/.gitkeep
+
+# Local files
+.env.local
+.DS_Store
+*.log
