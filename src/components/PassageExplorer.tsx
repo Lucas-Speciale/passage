@@ -195,6 +195,8 @@ export function PassageExplorer() {
   const [time, setTime] = useState(DEMO_PERIODS.length - 1);
   const [mode, setMode] = useState<PassageMode>("flow");
   const [playing, setPlaying] = useState(false);
+  const [showcaseStarted, setShowcaseStarted] = useState(false);
+  const [showcaseVisualReadyPeriod, setShowcaseVisualReadyPeriod] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.75);
   const [routesOnly, setRoutesOnly] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(!showcase);
@@ -209,6 +211,7 @@ export function PassageExplorer() {
   const previousStoryPeriod = useRef<string | null>(null);
   const contextTourCompleted = useRef(false);
   const disableContextAfterStory = useRef(false);
+  const showcaseReadySent = useRef(false);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -218,6 +221,21 @@ export function PassageExplorer() {
     });
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!showcase) return;
+    const startShowcase = (event: MessageEvent) => {
+      if (
+        event.source === window.parent
+        && event.data?.type === "showcase-start"
+        && event.data.app === "passage"
+      ) {
+        setShowcaseStarted(true);
+      }
+    };
+    window.addEventListener("message", startShowcase);
+    return () => window.removeEventListener("message", startShowcase);
+  }, [showcase]);
 
   const maxIndex = periods.length - 1;
   const lowerIndex = Math.min(maxIndex, Math.max(0, Math.floor(time)));
@@ -320,7 +338,7 @@ export function PassageExplorer() {
   }, [activeStory, maxIndex, mode, playing]);
 
   useEffect(() => {
-    if (!showcase || periods.length <= 97) return;
+    if (!showcase || !showcaseStarted || periods.length <= 97) return;
     let animationFrame = 0;
     const started = performance.now();
     const animateShowcase = (now: number) => {
@@ -331,7 +349,19 @@ export function PassageExplorer() {
     };
     animationFrame = requestAnimationFrame(animateShowcase);
     return () => cancelAnimationFrame(animationFrame);
-  }, [periods.length, showcase]);
+  }, [periods.length, showcase, showcaseStarted]);
+
+  useEffect(() => {
+    if (!showcase || periods.length <= 97 || showcaseReadySent.current) return;
+    const startPeriod = periods[Math.min(96, periods.length - 1)];
+    if (showcaseVisualReadyPeriod !== startPeriod) return;
+    showcaseReadySent.current = true;
+    if (window.parent === window) {
+      const frame = requestAnimationFrame(() => setShowcaseStarted(true));
+      return () => cancelAnimationFrame(frame);
+    }
+    window.parent.postMessage({ type: "showcase-ready", app: "passage" }, "*");
+  }, [periods, showcase, showcaseVisualReadyPeriod]);
 
   useEffect(() => {
     if (!storyClosing) return;
@@ -407,6 +437,8 @@ export function PassageExplorer() {
       <section className="ocean-stage">
         <PassageMap
           ref={mapRef}
+          showcase={showcase}
+          showcaseStarted={showcaseStarted}
           corridors={corridors}
           selectedId={selectedId}
           selectedDetail={selectedDetail}
@@ -421,6 +453,7 @@ export function PassageExplorer() {
           storySequence={storySequence}
           storyClosing={storyClosing}
           routesOnly={routesOnly}
+          onVisualReady={setShowcaseVisualReadyPeriod}
           onStoryContinue={continueStory}
           onCorridorSelect={selectCorridorById}
           onZoomChange={setZoom}

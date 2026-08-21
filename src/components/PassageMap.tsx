@@ -36,6 +36,8 @@ export interface DetailConfig {
 }
 
 interface PassageMapProps {
+  showcase: boolean;
+  showcaseStarted: boolean;
   corridors: Corridor[];
   selectedId: string;
   selectedDetail?: DetailConfig;
@@ -50,6 +52,7 @@ interface PassageMapProps {
   storySequence: number;
   storyClosing: boolean;
   routesOnly: boolean;
+  onVisualReady: (period: string) => void;
   onStoryContinue: () => void;
   onCorridorSelect: (id: string) => void;
   onZoomChange: (zoom: number) => void;
@@ -283,8 +286,10 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
   propsRef.current = props;
   const onCorridorSelectRef = useRef(props.onCorridorSelect);
   const onZoomChangeRef = useRef(props.onZoomChange);
+  const onVisualReadyRef = useRef(props.onVisualReady);
   onCorridorSelectRef.current = props.onCorridorSelect;
   onZoomChangeRef.current = props.onZoomChange;
+  onVisualReadyRef.current = props.onVisualReady;
 
   useImperativeHandle(ref, () => ({
     focusCorridor(corridor, detail) {
@@ -333,7 +338,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     const map = new maplibregl.Map({
       container,
       style: MAP_STYLE,
-      center: [0, 18],
+      center: propsRef.current.showcase ? [0, 32] : [0, 18],
       zoom: 0.75,
       minZoom: 0.35,
       maxZoom: 13,
@@ -349,6 +354,9 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     mapRef.current = map;
 
     map.on("load", () => {
+      if (propsRef.current.showcase) {
+        map.jumpTo({ center: [0, 32], zoom: 0.75, pitch: 0, bearing: 0 });
+      }
       keepMaritimeLabels(map);
       rememberBasemapVisibility(map);
       const firstSymbol = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
@@ -487,6 +495,10 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
       map.on("zoom", () => onZoomChangeRef.current(map.getZoom()));
       loadedRef.current = true;
       setMapReady(true);
+      const readyPeriod = propsRef.current.lowerPeriod;
+      if (propsRef.current.showcase && !propsRef.current.showcaseStarted) {
+        map.once("idle", () => onVisualReadyRef.current(readyPeriod));
+      }
       updateMap(map, propsRef.current);
       setRoutesOnly(map, propsRef.current.routesOnly);
       onZoomChangeRef.current(map.getZoom());
@@ -502,8 +514,19 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map && loadedRef.current) updateMap(map, propsRef.current);
-  }, [props.corridors, props.detailActive, props.earlierLowerPeriod, props.earlierUpperPeriod, props.lowerPeriod, props.mix, props.mode, props.selectedDetail, props.selectedId, props.upperPeriod]);
+    if (!map || !loadedRef.current) return;
+    const readyPeriod = props.lowerPeriod;
+    if (props.showcase && !props.showcaseStarted) {
+      map.once("idle", () => onVisualReadyRef.current(readyPeriod));
+    }
+    updateMap(map, propsRef.current);
+  }, [props.corridors, props.detailActive, props.earlierLowerPeriod, props.earlierUpperPeriod, props.lowerPeriod, props.mix, props.mode, props.selectedDetail, props.selectedId, props.showcase, props.showcaseStarted, props.upperPeriod]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || !props.showcase) return;
+    map.jumpTo({ center: [0, 32], zoom: 0.75, pitch: 0, bearing: 0 });
+  }, [props.showcase]);
 
   useEffect(() => {
     const map = mapRef.current;
