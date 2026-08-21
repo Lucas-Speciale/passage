@@ -31,3 +31,9 @@ The global route textures are 2,048 × 2,048 Web Mercator WebP files derived fro
 Each named passage also has a compact 2012–2026 corridor fingerprint. Every vertical slice compresses one monthly route field across the passage’s principal route axis; dragging its playhead updates the same map timeline and reveals lane persistence, branching, and drift without implying vessel direction.
 
 The basemap uses OpenFreeMap vector tiles. Default inland settlement labels are suppressed; country labels remain globally available and a small local GeoJSON layer supplies shipping-relevant coastal-city names.
+
+## Deployment
+
+Browser-ready route fields and passage details under `public/data/passage/` are tracked so the static site can build without the raw source archives.
+
+Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `passage`. The production site is available at `passage.pages.dev`; attach `passage.lucasspeciale.com` as the custom domain for the portfolio embed.

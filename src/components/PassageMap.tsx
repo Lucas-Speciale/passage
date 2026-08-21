@@ -20,6 +20,13 @@ const WORLD_COORDINATES: [[number, number], [number, number], [number, number], 
 const GLOBAL_SLOTS = ["current-lower", "current-upper", "earlier-lower", "earlier-upper"] as const;
 const DETAIL_SLOTS = ["detail-current-lower", "detail-current-upper", "detail-earlier-lower", "detail-earlier-upper"] as const;
 const SOURCE_IMAGE_KEYS = new WeakMap<MapLibreMap, Map<string, string>>();
+const BASEMAP_VISIBILITY = new WeakMap<MapLibreMap, Map<string, "visible" | "none">>();
+const MAP_REFERENCE_LAYERS = [
+  "passage-country-fill",
+  "passage-country-outline",
+  "passage-coastal-city-dots",
+  "passage-coastal-city-labels",
+] as const;
 
 export interface DetailConfig {
   slug: string;
@@ -41,6 +48,9 @@ interface PassageMapProps {
   mix: number;
   activeStory: PassageStory | null;
   storySequence: number;
+  storyClosing: boolean;
+  routesOnly: boolean;
+  onStoryContinue: () => void;
   onCorridorSelect: (id: string) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -178,6 +188,23 @@ function keepMaritimeLabels(map: MapLibreMap) {
     const keep = id.startsWith("place_country") || id.includes("country") || id.includes("ocean") || id.includes("sea");
     map.setLayoutProperty(layer.id, "visibility", keep ? "visible" : "none");
   }
+}
+
+function rememberBasemapVisibility(map: MapLibreMap) {
+  const visibility = new Map<string, "visible" | "none">();
+  for (const layer of map.getStyle().layers ?? []) {
+    visibility.set(layer.id, map.getLayoutProperty(layer.id, "visibility") === "none" ? "none" : "visible");
+  }
+  BASEMAP_VISIBILITY.set(map, visibility);
+}
+
+function setRoutesOnly(map: MapLibreMap, routesOnly: boolean) {
+  for (const [id, visibility] of BASEMAP_VISIBILITY.get(map) ?? []) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", routesOnly ? "none" : visibility);
+  }
+  MAP_REFERENCE_LAYERS.forEach((id) => {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", routesOnly ? "none" : "visible");
+  });
 }
 
 function updateDetailSources(map: MapLibreMap, props: PassageMapProps) {
@@ -323,6 +350,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
 
     map.on("load", () => {
       keepMaritimeLabels(map);
+      rememberBasemapVisibility(map);
       const firstSymbol = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
       map.addSource("passage-countries", { type: "geojson", data: "/data/passage/countries.geojson" });
       map.addLayer({
@@ -460,6 +488,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
       loadedRef.current = true;
       setMapReady(true);
       updateMap(map, propsRef.current);
+      setRoutesOnly(map, propsRef.current.routesOnly);
       onZoomChangeRef.current(map.getZoom());
     });
 
@@ -475,6 +504,11 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     const map = mapRef.current;
     if (map && loadedRef.current) updateMap(map, propsRef.current);
   }, [props.corridors, props.detailActive, props.earlierLowerPeriod, props.earlierUpperPeriod, props.lowerPeriod, props.mix, props.mode, props.selectedDetail, props.selectedId, props.upperPeriod]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && loadedRef.current) setRoutesOnly(map, props.routesOnly);
+  }, [props.routesOnly]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -501,7 +535,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
       {props.activeStory && storyPoint && (
         <div
           key={`${props.activeStory.id}-${props.storySequence}`}
-          className={`story-callout story-${
+          className={`story-callout${props.storyClosing ? " story-closing" : ""} story-${
             storyPoint.width > 780 && props.activeStory.side === "right" && storyPoint.x + 374 > storyPoint.width - 340
               ? "left"
               : storyPoint.width > 780 && props.activeStory.side === "left" && storyPoint.x - 374 < 20
@@ -513,7 +547,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
         >
           <span className="story-anchor" aria-hidden="true"><i /></span>
           <span className="story-leader" aria-hidden="true" />
-          <article className="story-card" role="status">
+          <article className="story-card">
             <div className="story-card-content">
               <p>{props.activeStory.category} · {formatPeriod(props.activeStory.period)}</p>
               <h2>{props.activeStory.title}</h2>
@@ -521,6 +555,12 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
                 <p>{props.activeStory.body}</p>
                 {props.activeStory.note && <small>{props.activeStory.note}</small>}
                 <span>{props.activeStory.source}</span>
+                <button
+                  className="story-continue"
+                  type="button"
+                  disabled={props.storyClosing}
+                  onClick={props.onStoryContinue}
+                >Continue <i aria-hidden="true">→</i></button>
               </div>
             </div>
           </article>

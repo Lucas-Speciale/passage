@@ -13,7 +13,8 @@ import type { Corridor, CorridorData, PassageMode } from "@/types/passage";
 const DEMO_PERIODS = ["2012-01", "2020-04", "2026-07"];
 const DETAIL_ZOOM = 5.5;
 const MONTH_DURATION = 560;
-const STORY_DURATION = 8400;
+const STORY_CLOSE_DURATION = 720;
+const LAST_STORY_ID = PASSAGE_STORIES[PASSAGE_STORIES.length - 1].id;
 const GUIDE_DISMISSED_KEY = "passage:guide-dismissed:2026-08-v1";
 
 interface PassageManifest {
@@ -186,25 +187,37 @@ function CorridorAnalysis({
 }
 
 export function PassageExplorer() {
-  const [showcase] = useState(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("showcase") === "1",
-  );
+  const [showcase, setShowcase] = useState(false);
   const [corridors, setCorridors] = useState<Corridor[]>([]);
   const [periods, setPeriods] = useState<string[]>(DEMO_PERIODS);
   const [detailManifest, setDetailManifest] = useState<DetailManifest | null>(null);
   const [selectedId, setSelectedId] = useState("chokepoint1");
   const [time, setTime] = useState(DEMO_PERIODS.length - 1);
   const [mode, setMode] = useState<PassageMode>("flow");
-  const [playing, setPlaying] = useState(showcase);
+  const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(0.75);
+  const [routesOnly, setRoutesOnly] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(!showcase);
+  const [contextAttention, setContextAttention] = useState(false);
   const [activeStory, setActiveStory] = useState<PassageStory | null>(null);
+  const [storyClosing, setStoryClosing] = useState(false);
   const [storySequence, setStorySequence] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [aboutAttention, setAboutAttention] = useState(false);
   const mapRef = useRef<PassageMapHandle>(null);
   const previousFrame = useRef<number | null>(null);
   const previousStoryPeriod = useRef<string | null>(null);
+  const contextTourCompleted = useRef(false);
+  const disableContextAfterStory = useRef(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const showcaseEnabled = new URLSearchParams(window.location.search).get("showcase") === "1";
+      setShowcase(showcaseEnabled);
+      if (showcaseEnabled) setContextEnabled(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const maxIndex = periods.length - 1;
   const lowerIndex = Math.min(maxIndex, Math.max(0, Math.floor(time)));
@@ -227,13 +240,22 @@ export function PassageExplorer() {
     rememberGuideDismissal();
     setAboutOpen(false);
     setAboutAttention(true);
+    setPlaying(true);
   }, []);
 
   const showStory = useCallback((story: PassageStory) => {
+    setStoryClosing(false);
     setActiveStory(story);
     setStorySequence((sequence) => sequence + 1);
     mapRef.current?.ensureStoryVisible(story.lon, story.lat);
   }, []);
+
+  const continueStory = useCallback(() => {
+    if (activeStory?.id === LAST_STORY_ID && !contextTourCompleted.current) {
+      disableContextAfterStory.current = true;
+    }
+    setStoryClosing(true);
+  }, [activeStory]);
 
   useEffect(() => {
     if (showcase) return;
@@ -297,10 +319,34 @@ export function PassageExplorer() {
   }, [activeStory, maxIndex, mode, playing]);
 
   useEffect(() => {
-    if (!activeStory) return;
-    const timer = window.setTimeout(() => setActiveStory(null), STORY_DURATION);
+    if (!showcase || periods.length <= 97) return;
+    let animationFrame = 0;
+    const started = performance.now();
+    const animateShowcase = (now: number) => {
+      const phase = ((now - started) % 24_000) / 24_000;
+      const easedCycle = (1 - Math.cos(phase * Math.PI * 2)) / 2;
+      setTime(96 + easedCycle * Math.min(40, periods.length - 97));
+      animationFrame = requestAnimationFrame(animateShowcase);
+    };
+    animationFrame = requestAnimationFrame(animateShowcase);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [periods.length, showcase]);
+
+  useEffect(() => {
+    if (!storyClosing) return;
+    const timer = window.setTimeout(() => {
+      setActiveStory(null);
+      setStoryClosing(false);
+      if (disableContextAfterStory.current) {
+        disableContextAfterStory.current = false;
+        contextTourCompleted.current = true;
+        previousStoryPeriod.current = null;
+        setContextEnabled(false);
+        setContextAttention(true);
+      }
+    }, STORY_CLOSE_DURATION);
     return () => window.clearTimeout(timer);
-  }, [activeStory, storySequence]);
+  }, [storyClosing]);
 
   useEffect(() => {
     if (!contextEnabled) return;
@@ -308,9 +354,13 @@ export function PassageExplorer() {
     previousStoryPeriod.current = lowerPeriod;
     const story = storyForPeriod(lowerPeriod);
     if (!story) return;
-    const timer = window.setTimeout(() => showStory(story), 0);
+    const timer = window.setTimeout(() => {
+      const storyIndex = periods.indexOf(story.period);
+      if (storyIndex >= 0) setTime(storyIndex);
+      showStory(story);
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [contextEnabled, lowerPeriod, showStory]);
+  }, [contextEnabled, lowerPeriod, periods, showStory]);
 
   useEffect(() => {
     [0, 12, lowerIndex - 1, upperIndex, upperIndex + 1, earlierLowerIndex, earlierUpperIndex, earlierUpperIndex + 1].forEach((index) => {
@@ -368,6 +418,9 @@ export function PassageExplorer() {
           mix={mix}
           activeStory={contextEnabled ? activeStory : null}
           storySequence={storySequence}
+          storyClosing={storyClosing}
+          routesOnly={routesOnly}
+          onStoryContinue={continueStory}
           onCorridorSelect={selectCorridorById}
           onZoomChange={setZoom}
         />
@@ -392,13 +445,19 @@ export function PassageExplorer() {
           <button className={mode === "change" ? "active" : ""} onClick={() => switchMode("change")}>Change</button>
         </div>
         <button
-          className={`context-button ${contextEnabled ? "active" : ""}`}
+          className={`context-button${contextEnabled ? " active" : ""}${contextAttention ? " attention" : ""}`}
           aria-pressed={contextEnabled}
           aria-label={`${contextEnabled ? "Hide" : "Show"} timeline context`}
           onClick={() => {
             previousStoryPeriod.current = null;
+            disableContextAfterStory.current = false;
             setActiveStory(null);
-            setContextEnabled(!contextEnabled);
+            setStoryClosing(false);
+            setContextAttention(false);
+            setContextEnabled((enabled) => !enabled);
+          }}
+          onAnimationEnd={(event) => {
+            if (event.animationName === "about-attention") setContextAttention(false);
           }}
         ><i aria-hidden="true" /><span>Context</span></button>
         <button
@@ -442,10 +501,17 @@ export function PassageExplorer() {
         ) : <div className="panel-loading">Loading passage index…</div>}
       </aside>
 
-      <div className="map-tools" aria-label="Map controls">
-        <button onClick={() => mapRef.current?.zoomIn()} aria-label="Zoom in">+</button>
-        <button onClick={() => mapRef.current?.zoomOut()} aria-label="Zoom out">−</button>
-        <button className="reset-button" onClick={() => mapRef.current?.reset()}>Whole world</button>
+      <div className="map-controls">
+        <div className="map-tools" aria-label="Map navigation">
+          <button onClick={() => mapRef.current?.zoomIn()} aria-label="Zoom in">+</button>
+          <button onClick={() => mapRef.current?.zoomOut()} aria-label="Zoom out">−</button>
+          <button className="reset-button" onClick={() => mapRef.current?.reset()}>Whole world</button>
+        </div>
+        <button
+          className={`routes-only-button${routesOnly ? " active" : ""}`}
+          aria-pressed={routesOnly}
+          onClick={() => setRoutesOnly((enabled) => !enabled)}
+        ><i aria-hidden="true" /><span>Routes only</span></button>
       </div>
 
       <div className={`map-legend ${mode}`}>
@@ -484,11 +550,12 @@ export function PassageExplorer() {
                 const storyIndex = periods.indexOf(story.period);
                 const minimum = mode === "change" ? 12 : 0;
                 if (storyIndex < minimum || storyIndex < 0) return null;
+                const storyPosition = ((storyIndex - minimum) / Math.max(maxIndex - minimum, 1)) * 100;
                 return (
                   <button
                     key={story.id}
                     className={activeStory?.id === story.id ? "active" : ""}
-                    style={{ left: `${(storyIndex / Math.max(maxIndex, 1)) * 100}%` }}
+                    style={{ left: `${storyPosition}%` }}
                     onClick={() => {
                       previousStoryPeriod.current = story.period;
                       setPlaying(false);
@@ -512,6 +579,7 @@ export function PassageExplorer() {
             onPointerDown={() => {
               setPlaying(false);
               setActiveStory(null);
+              setStoryClosing(false);
             }}
             onChange={(event) => setTime(Number(event.target.value))}
           />
@@ -533,19 +601,19 @@ export function PassageExplorer() {
             <h2 id="about-title">The network is the subject.</h2>
             <p>Play or drag the timeline to watch the ocean network change month by month. Passage shows aggregated cargo-vessel AIS presence—not individual ships, cargo tonnage, or exact voyages.</p>
             <div>
+              <span>Context</span><p>Context starts enabled, connecting route patterns with infrastructure, seasonal navigation, conflict, and disruption. You can turn it off at any time using Context in the upper-right. Press Continue to move through each note.</p>
               <span>Flow</span><p>Cyan brightness shows how consistently cargo-vessel AIS occupied each route during the selected month. Bright cores are persistent corridors; faint branches were used less often.</p>
               <span>Change</span><p>Compare the selected month with the same month one year earlier. Amber was stronger before, cyan is stronger now, and pale routes persisted across both periods.</p>
               <span>Passages</span><p>Select one of six strategic passages to zoom into its higher-detail monthly route field while the shared timeline keeps moving.</p>
               <span>Fingerprint</span><p>Read the selected passage as a 2012–2026 route profile. Each vertical slice is one month; drag across it to reveal persistent lanes, branching, and drift on the map.</p>
               <span>Transits</span><p>Switch to the PortWatch chart for estimated daily cargo-vessel transits and year-over-year change. This separate series begins in 2019.</p>
-              <span>Context</span><p>Animated notes connect visible route patterns with infrastructure, seasonal navigation, conflict, and disruption. Turn Context off at any time or select a timeline marker to revisit a story.</p>
             </div>
             <small className="guide-sources">
               <span><strong>Route presence and fingerprints</strong> Global Fishing Watch public-global-presence v4.0</span>
               <span><strong>Passage transit estimates</strong> IMF PortWatch</span>
               <span><strong>Basemap and place data</strong> OpenFreeMap · OpenMapTiles · OpenStreetMap</span>
               <span><strong>Reference validation</strong> World Bank–IMF commercial shipping-density archive, 2015–2021 (not displayed)</span>
-              <span><strong>Context research</strong> IMO · UNCTAD · United Nations · Arctic Council · Suez Canal Authority · Panama Canal Authority</span>
+              <span><strong>Context research</strong> IMO · UNCTAD · United Nations · Arctic Council · Suez Canal Authority · Panama Canal Authority · Malaysia Marine Department STRAITREP</span>
             </small>
           </section>
         </div>
