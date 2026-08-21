@@ -187,7 +187,9 @@ function CorridorAnalysis({
 }
 
 export function PassageExplorer() {
-  const [showcase, setShowcase] = useState(false);
+  const initialShowcase = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("showcase") === "1";
+  const [showcase] = useState(initialShowcase);
   const [corridors, setCorridors] = useState<Corridor[]>([]);
   const [periods, setPeriods] = useState<string[]>(DEMO_PERIODS);
   const [detailManifest, setDetailManifest] = useState<DetailManifest | null>(null);
@@ -196,10 +198,9 @@ export function PassageExplorer() {
   const [mode, setMode] = useState<PassageMode>("flow");
   const [playing, setPlaying] = useState(false);
   const [showcaseStarted, setShowcaseStarted] = useState(false);
-  const [showcaseVisualReadyPeriod, setShowcaseVisualReadyPeriod] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.75);
   const [routesOnly, setRoutesOnly] = useState(false);
-  const [contextEnabled, setContextEnabled] = useState(!showcase);
+  const [contextEnabled, setContextEnabled] = useState(!initialShowcase);
   const [contextAttention, setContextAttention] = useState(false);
   const [activeStory, setActiveStory] = useState<PassageStory | null>(null);
   const [storyClosing, setStoryClosing] = useState(false);
@@ -211,31 +212,6 @@ export function PassageExplorer() {
   const previousStoryPeriod = useRef<string | null>(null);
   const contextTourCompleted = useRef(false);
   const disableContextAfterStory = useRef(false);
-  const showcaseReadySent = useRef(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const showcaseEnabled = new URLSearchParams(window.location.search).get("showcase") === "1";
-      setShowcase(showcaseEnabled);
-      if (showcaseEnabled) setContextEnabled(false);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    if (!showcase) return;
-    const startShowcase = (event: MessageEvent) => {
-      if (
-        event.source === window.parent
-        && event.data?.type === "showcase-start"
-        && event.data.app === "passage"
-      ) {
-        setShowcaseStarted(true);
-      }
-    };
-    window.addEventListener("message", startShowcase);
-    return () => window.removeEventListener("message", startShowcase);
-  }, [showcase]);
 
   const maxIndex = periods.length - 1;
   const lowerIndex = Math.min(maxIndex, Math.max(0, Math.floor(time)));
@@ -351,17 +327,11 @@ export function PassageExplorer() {
     return () => cancelAnimationFrame(animationFrame);
   }, [periods.length, showcase, showcaseStarted]);
 
-  useEffect(() => {
-    if (!showcase || periods.length <= 97 || showcaseReadySent.current) return;
+  const startShowcase = useCallback((readyPeriod: string) => {
+    if (!showcase || periods.length <= 97) return;
     const startPeriod = periods[Math.min(96, periods.length - 1)];
-    if (showcaseVisualReadyPeriod !== startPeriod) return;
-    showcaseReadySent.current = true;
-    if (window.parent === window) {
-      const frame = requestAnimationFrame(() => setShowcaseStarted(true));
-      return () => cancelAnimationFrame(frame);
-    }
-    window.parent.postMessage({ type: "showcase-ready", app: "passage" }, "*");
-  }, [periods, showcase, showcaseVisualReadyPeriod]);
+    if (readyPeriod === startPeriod) setShowcaseStarted(true);
+  }, [periods, showcase]);
 
   useEffect(() => {
     if (!storyClosing) return;
@@ -453,7 +423,7 @@ export function PassageExplorer() {
           storySequence={storySequence}
           storyClosing={storyClosing}
           routesOnly={routesOnly}
-          onVisualReady={setShowcaseVisualReadyPeriod}
+          onVisualReady={startShowcase}
           onStoryContinue={continueStory}
           onCorridorSelect={selectCorridorById}
           onZoomChange={setZoom}

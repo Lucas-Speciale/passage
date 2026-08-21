@@ -24,6 +24,7 @@ const BASEMAP_VISIBILITY = new WeakMap<MapLibreMap, Map<string, "visible" | "non
 const MAP_REFERENCE_LAYERS = [
   "passage-country-fill",
   "passage-country-outline",
+  "passage-admin1-outline",
   "passage-coastal-city-dots",
   "passage-coastal-city-labels",
 ] as const;
@@ -193,6 +194,18 @@ function keepMaritimeLabels(map: MapLibreMap) {
   }
 }
 
+function emphasizeSubdivisionBoundaries(map: MapLibreMap) {
+  if (!map.getLayer("boundary_state")) return;
+  map.setPaintProperty("boundary_state", "line-color", "#667270");
+  map.setPaintProperty("boundary_state", "line-opacity", 0.62);
+  map.setPaintProperty("boundary_state", "line-width", [
+    "interpolate", ["linear"], ["zoom"],
+    0, 0.42,
+    5, 0.72,
+    10, 1.2,
+  ]);
+}
+
 function rememberBasemapVisibility(map: MapLibreMap) {
   const visibility = new Map<string, "visible" | "none">();
   for (const layer of map.getStyle().layers ?? []) {
@@ -358,6 +371,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
         map.jumpTo({ center: [0, 32], zoom: 0.75, pitch: 0, bearing: 0 });
       }
       keepMaritimeLabels(map);
+      emphasizeSubdivisionBoundaries(map);
       rememberBasemapVisibility(map);
       const firstSymbol = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
       map.addSource("passage-countries", { type: "geojson", data: "/data/passage/countries.geojson" });
@@ -384,6 +398,17 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
       addRasterLayer(map, "earlier-upper-layer", "earlier-upper", firstSymbol, true);
       addRasterLayer(map, "current-lower-layer", "current-lower", firstSymbol);
       addRasterLayer(map, "current-upper-layer", "current-upper", firstSymbol);
+
+      map.addSource("passage-admin1", { type: "geojson", data: "/data/passage/admin1-lines.geojson" });
+      map.addLayer({
+        id: "passage-admin1-outline",
+        type: "line",
+        source: "passage-admin1",
+        paint: {
+          "line-color": "rgba(134, 151, 147, 0.62)",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.38, 5, 0.68, 10, 1.1],
+        },
+      }, firstSymbol);
 
       map.addSource("passage-network", { type: "geojson", data: "/data/passage/world/network.geojson" });
       map.addLayer({
