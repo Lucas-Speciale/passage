@@ -3,8 +3,10 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, ImageSource, Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
+import { formatPeriod } from "@/lib/passage";
+import type { PassageStory } from "@/lib/stories";
 import type { Corridor, PassageMode } from "@/types/passage";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
@@ -37,6 +39,8 @@ interface PassageMapProps {
   earlierLowerPeriod: string;
   earlierUpperPeriod: string;
   mix: number;
+  activeStory: PassageStory | null;
+  storySequence: number;
   onCorridorSelect: (id: string) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -46,6 +50,7 @@ export interface PassageMapHandle {
   reset: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  ensureStoryVisible: (lon: number, lat: number) => void;
 }
 
 function routeUrl(period: string) {
@@ -245,6 +250,8 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const loadedRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [storyPoint, setStoryPoint] = useState<{ x: number; y: number; width: number } | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
   const onCorridorSelectRef = useRef(props.onCorridorSelect);
@@ -279,6 +286,16 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     zoomOut() {
       const map = mapRef.current;
       if (map) map.easeTo({ zoom: map.getZoom() - 0.8, duration: 320 });
+    },
+    ensureStoryVisible(lon, lat) {
+      const map = mapRef.current;
+      if (!map) return;
+      const point = map.project([lon, lat]);
+      const canvas = map.getCanvas();
+      const safe = point.x > 95 && point.x < canvas.clientWidth - 365 && point.y > 92 && point.y < canvas.clientHeight - 110;
+      if (!safe) {
+        map.easeTo({ center: [lon, lat], zoom: Math.min(map.getZoom(), 2.7), duration: 760, essential: false });
+      }
     },
   }), []);
 
@@ -441,12 +458,14 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
       });
       map.on("zoom", () => onZoomChangeRef.current(map.getZoom()));
       loadedRef.current = true;
+      setMapReady(true);
       updateMap(map, propsRef.current);
       onZoomChangeRef.current(map.getZoom());
     });
 
     return () => {
       loadedRef.current = false;
+      setMapReady(false);
       map.remove();
       mapRef.current = null;
     };
@@ -457,5 +476,56 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     if (map && loadedRef.current) updateMap(map, propsRef.current);
   }, [props.corridors, props.detailActive, props.earlierLowerPeriod, props.earlierUpperPeriod, props.lowerPeriod, props.mix, props.mode, props.selectedDetail, props.selectedId, props.upperPeriod]);
 
-  return <div ref={containerRef} className="passage-map" aria-label="Continuously wrapping map of commercial shipping routes" />;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !props.activeStory) {
+      setStoryPoint(null);
+      return;
+    }
+    const updatePosition = () => {
+      const point = map.project([props.activeStory!.lon, props.activeStory!.lat]);
+      setStoryPoint({ x: point.x, y: point.y, width: map.getContainer().clientWidth });
+    };
+    updatePosition();
+    map.on("move", updatePosition);
+    map.on("resize", updatePosition);
+    return () => {
+      map.off("move", updatePosition);
+      map.off("resize", updatePosition);
+    };
+  }, [mapReady, props.activeStory, props.storySequence]);
+
+  return (
+    <div className="passage-map" aria-label="Continuously wrapping map of commercial shipping routes">
+      <div ref={containerRef} className="passage-map-canvas" />
+      {props.activeStory && storyPoint && (
+        <div
+          key={`${props.activeStory.id}-${props.storySequence}`}
+          className={`story-callout story-${
+            storyPoint.width > 780 && props.activeStory.side === "right" && storyPoint.x + 374 > storyPoint.width - 340
+              ? "left"
+              : storyPoint.width > 780 && props.activeStory.side === "left" && storyPoint.x - 374 < 20
+                ? "right"
+                : props.activeStory.side
+          }`}
+          style={{ left: storyPoint.x, top: storyPoint.y }}
+          aria-live="polite"
+        >
+          <span className="story-anchor" aria-hidden="true"><i /></span>
+          <span className="story-leader" aria-hidden="true" />
+          <article className="story-card" role="status">
+            <div className="story-card-content">
+              <p>{props.activeStory.category} · {formatPeriod(props.activeStory.period)}</p>
+              <h2>{props.activeStory.title}</h2>
+              <div className="story-copy">
+                <p>{props.activeStory.body}</p>
+                {props.activeStory.note && <small>{props.activeStory.note}</small>}
+                <span>{props.activeStory.source}</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
+    </div>
+  );
 });
