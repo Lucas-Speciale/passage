@@ -83,6 +83,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-soft
 
 .maplibregl-ctrl-attrib a { color: var(--muted); }
 
+.showcase-mode .ocean-stage { inset: 0; }
+
+.showcase-mode > .brand-lockup,
+.showcase-mode > .period-overlay,
+.showcase-mode > .top-controls,
+.showcase-mode > .explore-panel,
+.showcase-mode > .map-tools,
+.showcase-mode > .map-legend,
+.showcase-mode > .timeline-shell,
+.showcase-mode .maplibregl-control-container {
+  display: none;
+}
+
 .ocean-grid {
   position: absolute;
   z-index: 2;

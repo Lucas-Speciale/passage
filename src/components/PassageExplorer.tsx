@@ -183,13 +183,16 @@ function CorridorAnalysis({
 }
 
 export function PassageExplorer() {
+  const [showcase] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("showcase") === "1",
+  );
   const [corridors, setCorridors] = useState<Corridor[]>([]);
   const [periods, setPeriods] = useState<string[]>(DEMO_PERIODS);
   const [detailManifest, setDetailManifest] = useState<DetailManifest | null>(null);
   const [selectedId, setSelectedId] = useState("chokepoint1");
   const [time, setTime] = useState(DEMO_PERIODS.length - 1);
   const [mode, setMode] = useState<PassageMode>("flow");
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(showcase);
   const [zoom, setZoom] = useState(0.75);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [aboutAttention, setAboutAttention] = useState(false);
@@ -220,11 +223,12 @@ export function PassageExplorer() {
   }, []);
 
   useEffect(() => {
+    if (showcase) return;
     const openTimer = window.setTimeout(() => {
       if (!hasDismissedGuide()) setAboutOpen(true);
     }, 0);
     return () => window.clearTimeout(openTimer);
-  }, []);
+  }, [showcase]);
 
   useEffect(() => {
     if (!aboutOpen) return;
@@ -250,13 +254,13 @@ export function PassageExplorer() {
         setCorridors(data.corridors);
         setPeriods(manifest.periods);
         setDetailManifest(details);
-        setTime(manifest.periods.length - 1);
+        setTime(showcase ? Math.min(96, manifest.periods.length - 1) : manifest.periods.length - 1);
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) console.error(error);
       });
     return () => controller.abort();
-  }, []);
+  }, [showcase]);
 
   useEffect(() => {
     if (!playing) {
@@ -319,7 +323,7 @@ export function PassageExplorer() {
   };
 
   return (
-    <main className={`passage-app mode-${mode}`}>
+    <main className={`passage-app mode-${mode}${showcase ? " showcase-mode" : ""}`}>
       <section className="ocean-stage">
         <PassageMap
           ref={mapRef}
