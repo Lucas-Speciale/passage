@@ -258,7 +258,8 @@ export function PassageExplorer() {
   }, [activeStory]);
 
   useEffect(() => {
-    if (showcase) return;
+    const showcaseRequested = new URLSearchParams(window.location.search).get("showcase") === "1";
+    if (showcase || showcaseRequested) return;
     const openTimer = window.setTimeout(() => {
       if (!hasDismissedGuide()) setAboutOpen(true);
     }, 0);
