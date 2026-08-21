@@ -36,4 +36,4 @@ The basemap uses OpenFreeMap vector tiles. Default inland settlement labels are 
 
 Browser-ready route fields and passage details under `public/data/passage/` are tracked so the static site can build without the raw source archives.
 
-Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `passage`. The production site is available at `passage.pages.dev`; attach `passage.lucasspeciale.com` as the custom domain for the portfolio embed.
+Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `passage`. The production site is available at `passage-4w1.pages.dev`; attach `passage.lucasspeciale.com` as the custom domain for the portfolio embed.
