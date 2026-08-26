@@ -13,6 +13,11 @@ __pycache__/
 data/raw/world-bank/*.zip
 data/raw/portwatch/daily-chokepoints-page-*.json
 data/raw/global-fishing-watch/downloads/
+data/raw/global-fishing-watch/global-*/
+data/raw/global-fishing-watch/pilot-*/
+data/raw/global-fishing-watch/*.zip
+data/raw/portwatch/*.json
+data/raw/world-bank/*.txt
 
 # Intermediate products are reproducible and are not deployed.
 data/processed/*

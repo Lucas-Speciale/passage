@@ -1,6 +1,6 @@
 # Raw data inventory
 
-This folder contains immutable source snapshots and their provenance. Large raw files are intentionally ignored by Git; only compact, validated derivatives will eventually be published from `public/data/shipping-corridors/`.
+This folder contains immutable source snapshots and their provenance. Raw files are intentionally ignored by Git; only validated, identity-free derivatives are published from `public/data/passage/`.
 
 ## Present now
 
