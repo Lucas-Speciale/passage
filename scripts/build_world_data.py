@@ -11,14 +11,13 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "public" / "data" / "passage"
 WORLD = OUTPUT / "world"
 GFW = ROOT / "data" / "raw" / "global-fishing-watch" / "downloads" / "global-monthly-low"
-GEOMETRY = ROOT.parent / "displacement-globe" / "public" / "data" / "displacement" / "geometry.geojson"
 WIDTH = 3600
 HEIGHT = 1800
 
@@ -71,53 +70,6 @@ def build_period(period: str) -> str:
     return period
 
 
-def iter_rings(geometry: dict):
-    coordinates = geometry["coordinates"]
-    if geometry["type"] == "Polygon":
-        yield from coordinates
-    elif geometry["type"] == "MultiPolygon":
-        for polygon in coordinates:
-            yield from polygon
-
-
-def unwrap_ring(ring: list[list[float]]) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    previous_x: float | None = None
-    offset = 0.0
-    for lon, lat in ring:
-        base_x = (lon + 180) / 360 * WIDTH
-        x = base_x + offset
-        if previous_x is not None:
-            if x - previous_x > WIDTH / 2:
-                offset -= WIDTH
-                x -= WIDTH
-            elif previous_x - x > WIDTH / 2:
-                offset += WIDTH
-                x += WIDTH
-        points.append((x, (90 - lat) / 180 * HEIGHT))
-        previous_x = x
-    return points
-
-
-def build_land() -> None:
-    source = json.loads(GEOMETRY.read_text())
-    canvas = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-    for feature in source["features"]:
-        for ring in iter_rings(feature["geometry"]):
-            if len(ring) < 3:
-                continue
-            points = unwrap_ring(ring)
-            for shift in (-WIDTH, 0, WIDTH):
-                shifted = [(x + shift, y) for x, y in points]
-                bounds = [point[0] for point in shifted]
-                if max(bounds) < 0 or min(bounds) > WIDTH:
-                    continue
-                draw.polygon(shifted, fill=(14, 21, 23, 250))
-                draw.line(shifted, fill=(72, 100, 104, 170), width=2, joint="curve")
-    canvas.save(WORLD / "land.webp", "WEBP", quality=84, method=4)
-
-
 def update_contract(periods: tuple[str, ...]) -> None:
     manifest_path = OUTPUT / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
@@ -129,12 +81,6 @@ def update_contract(periods: tuple[str, ...]) -> None:
     })
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
-    corridors_path = OUTPUT / "corridors.json"
-    corridor_data = json.loads(corridors_path.read_text())
-    for corridor in corridor_data["corridors"]:
-        corridor["worldX"] = round((corridor["lon"] + 180) / 360 * 100, 4)
-        corridor["worldY"] = round((90 - corridor["lat"]) / 180 * 100, 4)
-    corridors_path.write_text(json.dumps(corridor_data, separators=(",", ":")))
 
 
 def main() -> None:
@@ -146,7 +92,6 @@ def main() -> None:
     with ProcessPoolExecutor(max_workers=max(1, min(args.workers, 6))) as executor:
         for period in executor.map(build_period, periods):
             print(f"built {period}", flush=True)
-    build_land()
     update_contract(periods)
 
 

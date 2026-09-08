@@ -7,16 +7,6 @@ export function formatPeriod(period: string): string {
   );
 }
 
-export function seriesSummary(series: CorridorPoint[]) {
-  const latest = series.at(-1)?.dailyAverage ?? 0;
-  const baselineValues = series.filter((point) => point.period < "2023-01").map((point) => point.dailyAverage);
-  const baseline = baselineValues.length
-    ? baselineValues.reduce((total, value) => total + value, 0) / baselineValues.length
-    : latest;
-  const delta = baseline ? ((latest - baseline) / baseline) * 100 : 0;
-  return { latest, baseline, delta };
-}
-
 export function chartPath(series: CorridorPoint[], width: number, height: number): string {
   if (!series.length) return "";
   const values = series.map((point) => point.dailyAverage);

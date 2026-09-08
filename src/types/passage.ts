@@ -10,10 +10,6 @@ export interface Corridor {
   note: string;
   lon: number;
   lat: number;
-  x: number;
-  y: number;
-  worldX: number;
-  worldY: number;
   series: CorridorPoint[];
 }
 

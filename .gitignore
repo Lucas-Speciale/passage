@@ -3,6 +3,7 @@ node_modules/
 .next/
 out/
 coverage/
+*.tsbuildinfo
 
 # Python build environment
 .venv/

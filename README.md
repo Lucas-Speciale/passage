@@ -63,9 +63,12 @@ python3 -m venv .venv
 Raw source snapshots and their expected locations are documented under `data/raw/`. Rebuild deployable assets with:
 
 ```bash
+pnpm data:build:corridors
 pnpm data:build:world
 pnpm data:build:details
 ```
+
+The corridor command aggregates the existing PortWatch daily snapshots. The map uses MapLibre geometry; no legacy Spilhaus renderer or separate raster land overlays are generated.
 
 Raw GeoTIFFs, CSV reports, source archives, and vessel identifiers remain local and are ignored by Git. Only validated, identity-free browser derivatives are published.
 

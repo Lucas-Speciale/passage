@@ -11,13 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw" / "global-fishing-watch" / "downloads" / "corridor-high"
 OUTPUT = ROOT / "public" / "data" / "passage" / "details"
-GEOMETRY = ROOT.parent / "displacement-globe" / "public" / "data" / "displacement" / "geometry.geojson"
 CELL_SIZE = 0.01
 PIXELS_PER_CELL = 3
 
@@ -112,47 +111,9 @@ def build_archive(archive_path: Path) -> set[str]:
     return periods
 
 
-def iter_rings(geometry: dict):
-    coordinates = geometry["coordinates"]
-    if geometry["type"] == "Polygon":
-        yield from coordinates
-    elif geometry["type"] == "MultiPolygon":
-        for polygon in coordinates:
-            yield from polygon
-
-
-def build_land(region: Region, features: list[dict]) -> None:
-    width = (region.native_width + 1) * PIXELS_PER_CELL
-    height = (region.native_height + 1) * PIXELS_PER_CELL
-    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    for feature in features:
-        for ring in iter_rings(feature["geometry"]):
-            points = [
-                (
-                    (lon - region.west) / (region.east - region.west) * width,
-                    (region.north - lat) / (region.north - region.south) * height,
-                )
-                for lon, lat in ring
-            ]
-            if len(points) < 3:
-                continue
-            xs = [point[0] for point in points]
-            ys = [point[1] for point in points]
-            if max(xs) < 0 or min(xs) > width or max(ys) < 0 or min(ys) > height:
-                continue
-            draw.polygon(points, fill=(14, 21, 23, 255))
-            draw.line(points, fill=(78, 111, 114, 210), width=3, joint="curve")
-    path = OUTPUT / region.slug / "land.webp"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(path, "WEBP", quality=88, method=4)
-
-
 def write_manifest() -> None:
-    features = json.loads(GEOMETRY.read_text())["features"]
     manifest = {"resolution": 0.01, "pixelsPerCell": PIXELS_PER_CELL, "corridors": {}}
     for region in REGIONS:
-        build_land(region, features)
         periods = sorted(path.stem.removeprefix("route-") for path in (OUTPUT / region.slug).glob("route-*.webp"))
         manifest["corridors"][region.corridor_id] = {
             "slug": region.slug,
