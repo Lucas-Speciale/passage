@@ -6,6 +6,7 @@ import type { FeatureCollection } from "geojson";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import { formatPeriod } from "@/lib/passage";
+import { resetShowcaseReady } from "@/lib/showcase";
 import type { PassageStory } from "@/lib/stories";
 import type { Corridor, PassageMode } from "@/types/passage";
 
@@ -347,6 +348,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
   useEffect(() => {
     const container = containerRef.current;
     if (!container || mapRef.current) return;
+    if (propsRef.current.showcase) resetShowcaseReady();
     maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
     const map = new maplibregl.Map({
       container,
@@ -365,6 +367,10 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     map.dragRotate.disable();
     map.touchZoomRotate.disableRotation();
     mapRef.current = map;
+    // Observe the actual embed surface, including changes that do not produce
+    // a window resize. MapLibre's resize also synchronizes its overlay camera.
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
 
     map.on("load", () => {
       if (propsRef.current.showcase) {
@@ -532,6 +538,7 @@ export const PassageMap = forwardRef<PassageMapHandle, PassageMapProps>(function
     return () => {
       loadedRef.current = false;
       setMapReady(false);
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };

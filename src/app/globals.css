@@ -1,6 +1,5 @@
 :root {
   --ocean: #05090d;
-  --ocean-soft: #091116;
   --ink: #f7f4eb;
   --muted: #9da9a8;
   --faint: rgba(224, 238, 234, 0.12);
@@ -84,8 +83,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-soft
 
 .maplibregl-ctrl-attrib a { color: var(--muted); }
 
-.showcase-mode .ocean-stage { inset: 0; }
-
 .showcase-mode > .brand-lockup,
 .showcase-mode > .period-overlay,
 .showcase-mode > .top-controls,
@@ -111,123 +108,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-soft
   mask-image: radial-gradient(circle at center, black, transparent 76%);
   pointer-events: none;
 }
-
-.world-strip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: auto;
-  height: 100%;
-  aspect-ratio: 2 / 1;
-  transform-origin: center;
-  user-select: none;
-}
-
-.world-copy {
-  position: absolute;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #050b0f;
-}
-
-.route-field,
-.land-field {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.route-field {
-  z-index: 1;
-  filter: saturate(0.94) contrast(1.08);
-  mix-blend-mode: screen;
-}
-
-.route-field.warm-layer {
-  filter: sepia(1) saturate(4.6) hue-rotate(328deg) brightness(1.08) contrast(1.08);
-}
-
-.route-field.cool-layer { filter: saturate(1.08) contrast(1.12); }
-.land-field { z-index: 2; opacity: 0.96; }
-
-.detail-tile {
-  position: absolute;
-  z-index: 6;
-  overflow: hidden;
-}
-
-.detail-ocean,
-.detail-route,
-.detail-land {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.detail-ocean { z-index: 0; background: #050b0f; }
-.detail-land { z-index: 1; }
-.detail-route { z-index: 2; mix-blend-mode: screen; filter: saturate(1.02) contrast(1.08); }
-.detail-route.warm-layer { filter: sepia(1) saturate(4.6) hue-rotate(328deg) brightness(1.08) contrast(1.08); }
-.detail-route.cool-layer { filter: saturate(1.12) contrast(1.12); }
-
-.corridor-marker {
-  position: absolute;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 0;
-  padding: 8px;
-  background: transparent;
-  color: rgba(247, 244, 235, 0.7);
-  cursor: pointer;
-  transform: translate(-50%, -50%) scale(var(--marker-scale, 1));
-  white-space: nowrap;
-}
-
-.corridor-marker > span {
-  position: relative;
-  display: grid;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid rgba(242, 182, 109, 0.52);
-  border-radius: 50%;
-  background: rgba(5, 9, 13, 0.88);
-  box-shadow: 0 0 0 4px rgba(242, 182, 109, 0.05);
-}
-
-.corridor-marker > span i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--amber);
-}
-
-.corridor-marker strong {
-  font-size: 0.55rem;
-  font-weight: 750;
-  letter-spacing: 0.035em;
-  text-shadow: 0 2px 8px #000;
-}
-
-.corridor-marker.label-left { flex-direction: row-reverse; }
-.corridor-marker:hover, .corridor-marker.selected { color: var(--ink); }
-.corridor-marker.selected > span {
-  border-color: #ffe0a9;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px rgba(217, 111, 71, 0.16), 0 0 24px rgba(242, 182, 109, 0.42);
-}
-.corridor-marker.selected > span i { background: #fff8df; }
 
 .brand-lockup,
 .period-overlay,
@@ -1119,7 +999,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-soft
   .timeline-note { display: none; }
   .map-controls { position: absolute; bottom: calc(28svh + 22px); left: 14px; }
   .map-legend { position: absolute; bottom: calc(28svh + 66px); left: 14px; }
-  .corridor-marker strong { display: none; }
   .story-leader,
   .story-right .story-leader,
   .story-left .story-leader {
@@ -1172,3 +1051,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-soft
   .story-leader { transform: scaleY(1); }
   .story-card { transform: translateX(-50%); }
 }
+
+/* Embed geometry is independent of the standalone mobile interface. */
+
+.showcase-mode.passage-app { width: 100%; height: 100svh; min-height: 0; overflow: hidden; }
+.showcase-mode .ocean-stage { position: absolute; inset: 0; height: 100%; min-height: 0; }

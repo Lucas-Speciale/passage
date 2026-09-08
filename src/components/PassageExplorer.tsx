@@ -1,5 +1,7 @@
 "use client";
 
+import { notifyShowcaseReady, showcaseIsActive } from "@/lib/showcase";
+
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -320,7 +322,7 @@ export function PassageExplorer() {
     const animateShowcase = (now: number) => {
       const phase = ((now - started) % 24_000) / 24_000;
       const easedCycle = (1 - Math.cos(phase * Math.PI * 2)) / 2;
-      setTime(96 + easedCycle * Math.min(40, periods.length - 97));
+      if (showcaseIsActive()) setTime(96 + easedCycle * Math.min(40, periods.length - 97));
       animationFrame = requestAnimationFrame(animateShowcase);
     };
     animationFrame = requestAnimationFrame(animateShowcase);
@@ -330,7 +332,10 @@ export function PassageExplorer() {
   const startShowcase = useCallback((readyPeriod: string) => {
     if (!showcase || periods.length <= 97) return;
     const startPeriod = periods[Math.min(96, periods.length - 1)];
-    if (readyPeriod === startPeriod) setShowcaseStarted(true);
+    if (readyPeriod === startPeriod) {
+      setShowcaseStarted(true);
+      notifyShowcaseReady();
+    }
   }, [periods, showcase]);
 
   useEffect(() => {
